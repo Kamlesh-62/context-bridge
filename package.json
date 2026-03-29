@@ -1,6 +1,6 @@
 {
   "name": "context-bridge-mcp",
-  "version": "1.0.6",
+  "version": "1.0.7",
   "type": "module",
   "description": "Shared project memory for Claude Code, Codex, and Gemini CLI via MCP. Simple markdown-based storage.",
   "license": "MIT",
