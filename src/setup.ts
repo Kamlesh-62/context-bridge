@@ -43,6 +43,70 @@ function parseSetupArgs(argv: string[]): { clis: CliName[]; help: boolean } {
   return { clis, help };
 }
 
+const SKILLS: Record<string, string> = {
+  remember: `---
+name: remember
+description: Save a memory to shared project memory (.ai/memory/) accessible by all AI CLIs
+argument-hint: "<what to remember>"
+---
+
+Use the \`remember\` MCP tool to save the user's input to shared project memory.
+
+If the user provided text after \`/remember\`, use that as the title. Otherwise ask what they want to remember.
+
+Pick the best type (note, decision, fact, constraint, todo, architecture, glossary) and add relevant tags automatically. Do not ask the user to choose — just save it.
+`,
+  recall: `---
+name: recall
+description: Search shared project memory by keyword or tags
+argument-hint: "<search query>"
+---
+
+Use the \`recall\` MCP tool to search shared project memory.
+
+If the user provided text after \`/recall\`, use that as the query. Otherwise ask what they're looking for.
+
+Show results in a clear format with the #ID, type, title, and a snippet of content.
+`,
+  "memory-manage": `---
+name: memory-manage
+description: List, update, or delete shared project memories in .ai/memory/
+argument-hint: "list|status|delete #id|update #id"
+---
+
+Use the \`memory\` MCP tool to manage shared project memories.
+
+Parse the user's input after \`/memory-manage\`:
+- No argument or "list" -> action: "list"
+- "status" -> action: "status"
+- "delete #xxxx" or "delete Some Title" -> action: "delete" with id or title
+- "update #xxxx" followed by changes -> action: "update"
+
+Show results clearly. For list, show each memory as: #id  type  **title**  [tags]
+`,
+  "memory-compact": `---
+name: memory-compact
+description: Compact all individual memory files into a single .ai/memory.md file
+---
+
+Use the \`memory\` MCP tool with action "compact" to merge all individual memory files into a single \`.ai/memory.md\` file.
+
+Report how many memories were compacted.
+`,
+};
+
+async function installSkills(projectRoot: string): Promise<void> {
+  const skillsDir = path.join(projectRoot, ".claude", "skills");
+
+  for (const [name, content] of Object.entries(SKILLS)) {
+    const dir = path.join(skillsDir, name);
+    await fs.mkdir(dir, { recursive: true });
+    await fs.writeFile(path.join(dir, "SKILL.md"), content, "utf8");
+  }
+
+  console.log(`  Skills -> /remember, /recall, /memory-manage, /memory-compact`); // eslint-disable-line no-console
+}
+
 async function configureClaude(projectRoot: string, serverId: string): Promise<void> {
   const configPath = path.join(projectRoot, ".mcp.json");
 
@@ -164,6 +228,7 @@ export async function runSetup(argv: string[]): Promise<number> {
       switch (cli) {
         case "claude":
           await configureClaude(projectRoot, serverId);
+          await installSkills(projectRoot);
           break;
         case "gemini":
           await configureGemini(projectRoot, serverId);

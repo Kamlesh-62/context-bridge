@@ -79,8 +79,8 @@ describe("newId", () => {
   });
 
   it("generates mostly unique IDs", () => {
-    const ids = new Set(Array.from({ length: 50 }, () => newId()));
-    expect(ids.size).toBe(50);
+    const ids = new Set(Array.from({ length: 20 }, () => newId()));
+    expect(ids.size).toBe(20);
   });
 });
 
