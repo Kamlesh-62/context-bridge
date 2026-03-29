@@ -35,7 +35,7 @@ describe("writeMemory", () => {
     expect(item.content).toBe("We chose PostgreSQL for relational data.");
     expect(item.tags).toEqual(["database"]);
     expect(item.source).toBe("claude");
-    expect(item.id).toMatch(/^[a-f0-9]{8}-use-postgresql$/);
+    expect(item.id).toMatch(/^[a-f0-9]{4}$/);
 
     // Verify file exists
     const files = await fs.readdir(tmpDir);
@@ -97,7 +97,7 @@ describe("readMemory", () => {
       tags: ["test"],
     });
 
-    const idPrefix = written.id.split("-")[0];
+    const idPrefix = written.id;
     const found = await readMemory(tmpDir, idPrefix);
 
     expect(found).not.toBeNull();
@@ -119,7 +119,7 @@ describe("updateMemory", () => {
       tags: ["original"],
     });
 
-    const idPrefix = written.id.split("-")[0];
+    const idPrefix = written.id;
     const updated = await updateMemory(tmpDir, idPrefix, {
       title: "New title",
       content: "New content",
@@ -139,7 +139,7 @@ describe("updateMemory", () => {
       tags: ["old-tag"],
     });
 
-    const idPrefix = written.id.split("-")[0];
+    const idPrefix = written.id;
     const updated = await updateMemory(tmpDir, idPrefix, {
       tags: ["new-tag", "another"],
     });
@@ -162,8 +162,9 @@ describe("updateMemory", () => {
       content: "Content",
     });
 
-    const idPrefix = written.id.split("-")[0];
-    const updated = await updateMemory(tmpDir, idPrefix, { content: "Changed" });
+    // Small delay so timestamps differ
+    await new Promise((r) => setTimeout(r, 10));
+    const updated = await updateMemory(tmpDir, written.id, { content: "Changed" });
 
     expect(updated).not.toBeNull();
     expect(updated!.created).toBe(written.created);
@@ -178,7 +179,7 @@ describe("deleteMemory", () => {
       content: "Gone",
     });
 
-    const idPrefix = written.id.split("-")[0];
+    const idPrefix = written.id;
     const deleted = await deleteMemory(tmpDir, idPrefix);
     expect(deleted).toBe(true);
 

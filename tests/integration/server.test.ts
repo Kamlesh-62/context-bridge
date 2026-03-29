@@ -54,7 +54,7 @@ describe("full round-trip", () => {
     expect(sources).toEqual(["claude", "codex", "gemini"]);
 
     // 5. Read one by ID
-    const firstId = all[0].id.split("-")[0];
+    const firstId = all[0].id;
     const found = await readMemory(memoryDir, firstId);
     expect(found).not.toBeNull();
     expect(found!.id).toBe(all[0].id);
@@ -103,7 +103,7 @@ npm run dev
       tags: ["docs", "setup"],
     });
 
-    const idPrefix = written.id.split("-")[0];
+    const idPrefix = written.id;
     const read = await readMemory(memoryDir, idPrefix);
 
     expect(read).not.toBeNull();

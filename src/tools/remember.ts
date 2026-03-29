@@ -35,7 +35,7 @@ export function registerRememberTool(server: McpServer): void {
         content: [
           {
             type: "text",
-            text: `Saved: ${item.title} (${item.type}) -> ${item.id}.md`,
+            text: `Saved: ${item.title} (${item.type}) -> #${item.id}`,
           },
         ],
       };

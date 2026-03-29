@@ -8,7 +8,7 @@ export type MemoryType =
   | "glossary";
 
 export interface MemoryItem {
-  /** Derived from filename (e.g. "a1b2c3d4-use-postgres") */
+  /** Short hex identifier (e.g. "a1b2") */
   id: string;
   type: MemoryType;
   title: string;
@@ -21,6 +21,7 @@ export interface MemoryItem {
 
 /** Parsed frontmatter from a .md memory file */
 export interface MemoryFrontmatter {
+  id: string;
   type: string;
   tags: string[];
   created: string;

@@ -1,8 +1,12 @@
 export const CONFIG = {
   serverName: "context-bridge",
   serverVersion: "1.0.0",
-  /** Directory inside project root where memories are stored */
+  /** Directory inside project root where individual memory files are stored */
   memoryDir: ".ai/memory",
+  /** Single compacted memory file path */
+  memoryFile: ".ai/memory.md",
+  /** Auto-compact when individual files reach this count */
+  compactThreshold: 20,
 } as const;
 
 export const LIMITS = {

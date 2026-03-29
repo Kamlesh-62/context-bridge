@@ -63,9 +63,23 @@ export function safeSnippet(text: unknown, maxChars: number = LIMITS.maxSnippetC
   return `${s.slice(0, maxChars - 3)}...`;
 }
 
-/** Generate a short random ID. */
+/** Generate a short random ID (4 hex chars). */
 export function newId(): string {
-  return crypto.randomUUID().replace(/-/g, "").slice(0, 8);
+  return crypto.randomUUID().replace(/-/g, "").slice(0, 4);
+}
+
+/** Generate a unique ID that doesn't collide with existing ones. */
+export function newUniqueId(existingIds: Set<string>): string {
+  let id = newId();
+  let attempts = 0;
+  while (existingIds.has(id) && attempts < 10) {
+    id = newId();
+    attempts++;
+  }
+  if (existingIds.has(id)) {
+    id = crypto.randomUUID().replace(/-/g, "").slice(0, 6);
+  }
+  return id;
 }
 
 /** Create a filename-safe slug from text. */

@@ -63,7 +63,7 @@ export function registerRecallTool(server: McpServer): void {
       const output = results
         .map((item) => {
           const tagsStr = item.tags.length > 0 ? ` [${item.tags.join(", ")}]` : "";
-          return `**${item.title}** (${item.type})${tagsStr}\n${safeSnippet(item.content, 300)}\n_ID: ${item.id}_`;
+          return `#${item.id}  **${item.title}** (${item.type})${tagsStr}\n${safeSnippet(item.content, 300)}`;
         })
         .join("\n\n---\n\n");
 

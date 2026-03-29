@@ -59,7 +59,7 @@ export async function runInit(): Promise<number> {
   // eslint-disable-next-line no-console
   console.log(`Created: ${memoryDir}`);
   // eslint-disable-next-line no-console
-  console.log(`Saved: ${item.title} -> ${item.id}.md`);
+  console.log(`Saved: ${item.title} -> #${item.id}`);
   // eslint-disable-next-line no-console
   console.log(`\nTry: "Show memory status"`);
 

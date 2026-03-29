@@ -1,7 +1,8 @@
 import fs from "node:fs/promises";
 import path from "node:path";
+import { CONFIG } from "./config.js";
 import { findProjectRoot, resolveMemoryDir, nowIso } from "./runtime.js";
-import { newId, slugify, normalizeTags, validateType } from "./domain.js";
+import { newUniqueId, normalizeTags, validateType } from "./domain.js";
 import type { MemoryItem, MemoryFrontmatter } from "./types.js";
 
 // --- Frontmatter parsing ---
@@ -47,6 +48,7 @@ export function parseFrontmatter(raw: string): {
 /** Serialize frontmatter + content into a markdown string. */
 export function serializeFrontmatter(meta: MemoryFrontmatter, content: string): string {
   const lines: string[] = ["---"];
+  lines.push(`id: ${meta.id}`);
   lines.push(`type: ${meta.type}`);
   lines.push(`title: ${meta.title}`);
   if (meta.tags.length > 0) {
@@ -66,25 +68,35 @@ export function serializeFrontmatter(meta: MemoryFrontmatter, content: string): 
 
 // --- File operations ---
 
+const COMPACT_HEADER = "<!-- context-bridge memories -->";
+
 /** Ensure the memory directory exists. */
 export async function ensureMemoryDir(memoryDir: string): Promise<void> {
   await fs.mkdir(memoryDir, { recursive: true });
 }
 
-/** Build a filename for a memory item. */
-export function buildFilename(id: string, title: string): string {
-  const slug = slugify(title);
-  return slug ? `${id}-${slug}.md` : `${id}.md`;
+/** Build a filename for a memory item (short ID only). */
+export function buildFilename(id: string): string {
+  return `${id}.md`;
+}
+
+/** Extract the short hex ID from a filename, handling old long format. */
+function idFromFilename(filename: string): string {
+  const base = path.basename(filename, ".md");
+  // Old format: "a1b2c3d4-use-postgresql" → extract "a1b2c3d4"
+  // New format: "a1b2" → use as-is
+  const match = base.match(/^([a-f0-9]{4,8})/);
+  return match ? match[1] : base;
 }
 
 /** Parse a MemoryItem from a .md file. */
 function fileToItem(filePath: string, raw: string): MemoryItem {
   const { meta, content } = parseFrontmatter(raw);
-  const id = path.basename(filePath, ".md");
+  const id = idFromFilename(filePath);
   const now = nowIso();
 
   return {
-    id,
+    id: typeof meta.id === "string" ? meta.id : id,
     type: validateType(meta.type),
     title: typeof meta.title === "string" ? meta.title : id,
     content,
@@ -95,8 +107,74 @@ function fileToItem(filePath: string, raw: string): MemoryItem {
   };
 }
 
-/** Read all memory items from the memory directory. */
-export async function readAllMemories(memoryDir: string): Promise<MemoryItem[]> {
+/** Parse all memory items from a compacted .ai/memory.md file. */
+function parseCompactFile(raw: string): MemoryItem[] {
+  if (!raw.trim()) return [];
+
+  // Split on blank line followed by --- and id:
+  const sections = raw.split(/\n\n(?=---\nid: )/);
+  const items: MemoryItem[] = [];
+  const now = nowIso();
+
+  for (const section of sections) {
+    const trimmed = section.trim();
+    if (!trimmed.startsWith("---")) continue;
+
+    const { meta, content } = parseFrontmatter(trimmed);
+    if (!meta.id || typeof meta.id !== "string") continue;
+
+    items.push({
+      id: meta.id,
+      type: validateType(meta.type),
+      title: typeof meta.title === "string" ? meta.title : meta.id,
+      content: content.trim(),
+      tags: normalizeTags(meta.tags),
+      source: typeof meta.source === "string" ? meta.source : undefined,
+      created: typeof meta.created === "string" ? meta.created : now,
+      updated: typeof meta.updated === "string" ? meta.updated : now,
+    });
+  }
+
+  return items;
+}
+
+/** Serialize all memory items into a single compacted file string. */
+function serializeCompactFile(items: MemoryItem[]): string {
+  const sections: string[] = [COMPACT_HEADER, ""];
+
+  for (const item of items) {
+    const meta: MemoryFrontmatter = {
+      id: item.id,
+      type: item.type,
+      title: item.title,
+      tags: item.tags,
+      created: item.created,
+      updated: item.updated,
+      source: item.source,
+    };
+    sections.push(serializeFrontmatter(meta, item.content));
+  }
+
+  return sections.join("\n");
+}
+
+/** Resolve the compact file path (.ai/memory.md) for a project root. */
+function resolveCompactFile(projectRoot: string): string {
+  return path.join(projectRoot, CONFIG.memoryFile);
+}
+
+/** Check if the compact file exists. */
+async function compactFileExists(projectRoot: string): Promise<boolean> {
+  try {
+    await fs.stat(resolveCompactFile(projectRoot));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Read memories from individual files in the directory. */
+async function readFromDir(memoryDir: string): Promise<MemoryItem[]> {
   try {
     const files = await fs.readdir(memoryDir);
     const mdFiles = files.filter((f) => f.endsWith(".md")).sort();
@@ -116,33 +194,86 @@ export async function readAllMemories(memoryDir: string): Promise<MemoryItem[]> 
   }
 }
 
-/** Read a single memory item by ID. */
-export async function readMemory(memoryDir: string, id: string): Promise<MemoryItem | null> {
+/** Read memories from the compact file. */
+async function readFromCompactFile(projectRoot: string): Promise<MemoryItem[]> {
   try {
-    const files = await fs.readdir(memoryDir);
-    const match = files.find((f) => f.startsWith(id) && f.endsWith(".md"));
-    if (!match) return null;
-
-    const raw = await fs.readFile(path.join(memoryDir, match), "utf8");
-    return fileToItem(match, raw);
+    const raw = await fs.readFile(resolveCompactFile(projectRoot), "utf8");
+    return parseCompactFile(raw);
   } catch {
-    return null;
+    return [];
   }
 }
 
-/** Write a memory item as a .md file. Returns the item with its ID. */
+// --- Write lock for single-file operations ---
+
+let writeLock = Promise.resolve();
+
+async function withWriteLock<T>(fn: () => Promise<T>): Promise<T> {
+  const prev = writeLock;
+  let resolve: () => void;
+  writeLock = new Promise<void>((r) => {
+    resolve = r;
+  });
+  await prev;
+  try {
+    return await fn();
+  } finally {
+    resolve!();
+  }
+}
+
+// --- Public API ---
+
+/** Read all memory items from both individual files and compact file. */
+export async function readAllMemories(memoryDir: string): Promise<MemoryItem[]> {
+  const projectRoot = path.dirname(memoryDir);
+  const dirItems = await readFromDir(memoryDir);
+  const compactItems = await readFromCompactFile(projectRoot);
+
+  // Merge, deduplicating by ID (dir items take precedence)
+  const seen = new Set<string>();
+  const items: MemoryItem[] = [];
+
+  for (const item of dirItems) {
+    seen.add(item.id);
+    items.push(item);
+  }
+  for (const item of compactItems) {
+    if (!seen.has(item.id)) {
+      seen.add(item.id);
+      items.push(item);
+    }
+  }
+
+  return items;
+}
+
+/** Read a single memory item by ID (prefix match). */
+export async function readMemory(memoryDir: string, id: string): Promise<MemoryItem | null> {
+  const cleanId = id.replace(/^#/, "");
+  const all = await readAllMemories(memoryDir);
+  return all.find((item) => item.id.startsWith(cleanId)) ?? null;
+}
+
+/** Write a memory item. Appends to compact file if it exists, otherwise creates individual file. */
 export async function writeMemory(
   memoryDir: string,
   input: { type?: string; title: string; content?: string; tags?: string[]; source?: string },
 ): Promise<MemoryItem> {
-  await ensureMemoryDir(memoryDir);
+  const projectRoot = path.dirname(memoryDir);
+  const useCompact = await compactFileExists(projectRoot);
+
+  const allItems = await readAllMemories(memoryDir);
+  const existingIds = new Set(allItems.map((item) => item.id));
 
   const now = nowIso();
-  const id = newId();
+  const id = newUniqueId(existingIds);
   const type = validateType(input.type);
   const tags = normalizeTags(input.tags);
+  const content = (input.content || input.title).trim();
 
   const meta: MemoryFrontmatter = {
+    id,
     type,
     title: input.title.trim(),
     tags,
@@ -151,14 +282,8 @@ export async function writeMemory(
     source: input.source?.trim(),
   };
 
-  const filename = buildFilename(id, input.title);
-  const content = (input.content || input.title).trim();
-  const markdown = serializeFrontmatter(meta, content);
-
-  await fs.writeFile(path.join(memoryDir, filename), markdown, "utf8");
-
-  return {
-    id: path.basename(filename, ".md"),
+  const item: MemoryItem = {
+    id,
     type,
     title: meta.title,
     content,
@@ -167,6 +292,31 @@ export async function writeMemory(
     created: now,
     updated: now,
   };
+
+  if (useCompact) {
+    await withWriteLock(async () => {
+      const section = "\n" + serializeFrontmatter(meta, content);
+      await fs.appendFile(resolveCompactFile(projectRoot), section, "utf8");
+    });
+  } else {
+    await ensureMemoryDir(memoryDir);
+    const filename = buildFilename(id);
+    const markdown = serializeFrontmatter(meta, content);
+    await fs.writeFile(path.join(memoryDir, filename), markdown, "utf8");
+
+    // Auto-compact check
+    try {
+      const files = await fs.readdir(memoryDir);
+      const mdFiles = files.filter((f) => f.endsWith(".md"));
+      if (mdFiles.length >= CONFIG.compactThreshold) {
+        await compactMemories(memoryDir);
+      }
+    } catch {
+      // ignore auto-compact errors
+    }
+  }
+
+  return item;
 }
 
 /** Update an existing memory item. Returns the updated item or null if not found. */
@@ -175,56 +325,170 @@ export async function updateMemory(
   id: string,
   updates: { title?: string; content?: string; type?: string; tags?: string[] },
 ): Promise<MemoryItem | null> {
+  const cleanId = id.replace(/^#/, "");
+  const projectRoot = path.dirname(memoryDir);
+  const now = nowIso();
+
+  // Try individual files first
   try {
     const files = await fs.readdir(memoryDir);
-    const match = files.find((f) => f.startsWith(id) && f.endsWith(".md"));
-    if (!match) return null;
+    const match = files.find((f) => f.startsWith(cleanId) && f.endsWith(".md"));
+    if (match) {
+      const filePath = path.join(memoryDir, match);
+      const raw = await fs.readFile(filePath, "utf8");
+      const item = fileToItem(match, raw);
 
-    const filePath = path.join(memoryDir, match);
-    const raw = await fs.readFile(filePath, "utf8");
-    const item = fileToItem(match, raw);
+      const meta: MemoryFrontmatter = {
+        id: item.id,
+        type: updates.type ? validateType(updates.type) : item.type,
+        title: updates.title?.trim() || item.title,
+        tags: updates.tags ? normalizeTags(updates.tags) : item.tags,
+        created: item.created,
+        updated: now,
+        source: item.source,
+      };
 
-    const now = nowIso();
-    const meta: MemoryFrontmatter = {
-      type: updates.type ? validateType(updates.type) : item.type,
+      const content = updates.content?.trim() || item.content;
+      const markdown = serializeFrontmatter(meta, content);
+      await fs.writeFile(filePath, markdown, "utf8");
+
+      return {
+        id: item.id,
+        type: meta.type as MemoryItem["type"],
+        title: meta.title,
+        content,
+        tags: meta.tags,
+        source: meta.source,
+        created: meta.created,
+        updated: now,
+      };
+    }
+  } catch {
+    // directory may not exist
+  }
+
+  // Try compact file
+  return withWriteLock(async () => {
+    const compactPath = resolveCompactFile(projectRoot);
+    let raw: string;
+    try {
+      raw = await fs.readFile(compactPath, "utf8");
+    } catch {
+      return null;
+    }
+
+    const items = parseCompactFile(raw);
+    const idx = items.findIndex((item) => item.id.startsWith(cleanId));
+    if (idx === -1) return null;
+
+    const item = items[idx];
+    const updated: MemoryItem = {
+      id: item.id,
+      type: updates.type ? (validateType(updates.type) as MemoryItem["type"]) : item.type,
       title: updates.title?.trim() || item.title,
+      content: updates.content?.trim() || item.content,
       tags: updates.tags ? normalizeTags(updates.tags) : item.tags,
+      source: item.source,
       created: item.created,
       updated: now,
-      source: item.source,
     };
 
-    const content = updates.content?.trim() || item.content;
-    const markdown = serializeFrontmatter(meta, content);
-    await fs.writeFile(filePath, markdown, "utf8");
-
-    return {
-      id: item.id,
-      type: meta.type as MemoryItem["type"],
-      title: meta.title,
-      content,
-      tags: meta.tags,
-      source: meta.source,
-      created: meta.created,
-      updated: now,
-    };
-  } catch {
-    return null;
-  }
+    items[idx] = updated;
+    await fs.writeFile(compactPath, serializeCompactFile(items), "utf8");
+    return updated;
+  });
 }
 
 /** Delete a memory item by ID. Returns true if deleted. */
 export async function deleteMemory(memoryDir: string, id: string): Promise<boolean> {
+  const cleanId = id.replace(/^#/, "");
+
+  // Try individual files first
   try {
     const files = await fs.readdir(memoryDir);
-    const match = files.find((f) => f.startsWith(id) && f.endsWith(".md"));
-    if (!match) return false;
-
-    await fs.unlink(path.join(memoryDir, match));
-    return true;
+    const match = files.find((f) => f.startsWith(cleanId) && f.endsWith(".md"));
+    if (match) {
+      await fs.unlink(path.join(memoryDir, match));
+      return true;
+    }
   } catch {
-    return false;
+    // directory may not exist
   }
+
+  // Try compact file
+  return withWriteLock(async () => {
+    const projectRoot = path.dirname(memoryDir);
+    const compactPath = resolveCompactFile(projectRoot);
+    let raw: string;
+    try {
+      raw = await fs.readFile(compactPath, "utf8");
+    } catch {
+      return false;
+    }
+
+    const items = parseCompactFile(raw);
+    const filtered = items.filter((item) => !item.id.startsWith(cleanId));
+    if (filtered.length === items.length) return false;
+
+    await fs.writeFile(compactPath, serializeCompactFile(filtered), "utf8");
+    return true;
+  });
+}
+
+/** Delete a memory item by title (case-insensitive). Returns true if deleted. */
+export async function deleteMemoryByTitle(memoryDir: string, title: string): Promise<boolean> {
+  const lowerTitle = title.toLowerCase().trim();
+  const all = await readAllMemories(memoryDir);
+  const match = all.find((item) => item.title.toLowerCase() === lowerTitle);
+  if (!match) return false;
+  return deleteMemory(memoryDir, match.id);
+}
+
+/** Compact all individual memory files into a single .ai/memory.md file. Returns count of compacted items. */
+export async function compactMemories(memoryDir: string): Promise<number> {
+  const projectRoot = path.dirname(memoryDir);
+  const compactPath = resolveCompactFile(projectRoot);
+
+  // Read from both sources
+  const dirItems = await readFromDir(memoryDir);
+  const compactItems = await readFromCompactFile(projectRoot);
+
+  // Merge (dedup by ID, dir takes precedence)
+  const seen = new Set<string>();
+  const allItems: MemoryItem[] = [];
+  for (const item of dirItems) {
+    seen.add(item.id);
+    allItems.push(item);
+  }
+  for (const item of compactItems) {
+    if (!seen.has(item.id)) {
+      allItems.push(item);
+    }
+  }
+
+  if (allItems.length === 0) return 0;
+
+  // Write compact file
+  await fs.mkdir(path.dirname(compactPath), { recursive: true });
+  await fs.writeFile(compactPath, serializeCompactFile(allItems), "utf8");
+
+  // Remove individual files
+  if (dirItems.length > 0) {
+    try {
+      const files = await fs.readdir(memoryDir);
+      for (const file of files) {
+        if (file.endsWith(".md")) {
+          await fs.unlink(path.join(memoryDir, file));
+        }
+      }
+      // Try removing the directory (will fail if not empty, which is fine)
+      await fs.rmdir(memoryDir);
+    } catch {
+      // ignore cleanup errors
+    }
+  }
+
+  return allItems.length;
 }
 
 /** Export all memories as a single JSON string. */

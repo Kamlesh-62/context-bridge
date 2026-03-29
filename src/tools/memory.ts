@@ -1,20 +1,27 @@
 import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { readAllMemories, deleteMemory, updateMemory, getMemoryDir } from "../storage.js";
+import {
+  readAllMemories,
+  deleteMemory,
+  deleteMemoryByTitle,
+  updateMemory,
+  compactMemories,
+  getMemoryDir,
+} from "../storage.js";
 
 export function registerMemoryTool(server: McpServer): void {
   server.registerTool(
     "memory",
     {
       description:
-        "Manage shared project memory (.ai/memory/) accessible by all AI CLIs. Actions: 'status' (default), 'list', 'update', 'delete'.",
+        "Manage shared project memory (.ai/memory/) accessible by all AI CLIs. Actions: 'status' (default), 'list', 'update', 'delete', 'compact'.",
       inputSchema: {
         action: z
-          .enum(["status", "list", "update", "delete"])
+          .enum(["status", "list", "update", "delete", "compact"])
           .default("status")
-          .describe("What to do: status, list, update, or delete"),
-        id: z.string().optional().describe("Memory ID (required for update and delete)"),
-        title: z.string().optional().describe("New title (for update)"),
+          .describe("What to do: status, list, update, delete, or compact"),
+        id: z.string().optional().describe("Memory ID like #a1b2 (for update/delete)"),
+        title: z.string().optional().describe("Title — for update or delete-by-title"),
         content: z.string().optional().describe("New content (for update)"),
         type: z.string().optional().describe("New type (for update)"),
         tags: z.array(z.string()).optional().describe("New tags (for update)"),
@@ -24,18 +31,43 @@ export function registerMemoryTool(server: McpServer): void {
     async ({ action, id, title, content, type, tags, projectRoot }) => {
       const { memoryDir, projectRoot: resolvedRoot } = await getMemoryDir(projectRoot);
 
-      if (action === "delete") {
-        if (!id) {
-          return {
-            content: [{ type: "text", text: "Error: 'id' is required for delete action." }],
-          };
-        }
-        const deleted = await deleteMemory(memoryDir, id);
+      if (action === "compact") {
+        const count = await compactMemories(memoryDir);
         return {
           content: [
             {
               type: "text",
-              text: deleted ? `Deleted memory: ${id}` : `Memory not found: ${id}`,
+              text:
+                count > 0
+                  ? `Compacted ${count} memories into .ai/memory.md`
+                  : "No memories to compact.",
+            },
+          ],
+        };
+      }
+
+      if (action === "delete") {
+        if (!id && !title) {
+          return {
+            content: [
+              { type: "text", text: "Error: 'id' or 'title' is required for delete action." },
+            ],
+          };
+        }
+
+        let deleted: boolean;
+        if (id) {
+          deleted = await deleteMemory(memoryDir, id);
+        } else {
+          deleted = await deleteMemoryByTitle(memoryDir, title!);
+        }
+
+        const ref = id || title;
+        return {
+          content: [
+            {
+              type: "text",
+              text: deleted ? `Deleted memory: ${ref}` : `Memory not found: ${ref}`,
             },
           ],
         };
@@ -57,7 +89,7 @@ export function registerMemoryTool(server: McpServer): void {
           content: [
             {
               type: "text",
-              text: `Updated: ${updated.title} (${updated.type}) — ${updated.id}`,
+              text: `Updated: ${updated.title} (${updated.type}) — #${updated.id}`,
             },
           ],
         };
@@ -79,8 +111,8 @@ export function registerMemoryTool(server: McpServer): void {
 
         const list = items
           .map((item) => {
-            const tagsStr = item.tags.length > 0 ? ` [${item.tags.join(", ")}]` : "";
-            return `- **${item.title}** (${item.type})${tagsStr} — _${item.id}_`;
+            const tagsStr = item.tags.length > 0 ? `  [${item.tags.join(", ")}]` : "";
+            return `#${item.id}  ${item.type}  **${item.title}**${tagsStr}`;
           })
           .join("\n");
 
@@ -109,8 +141,8 @@ export function registerMemoryTool(server: McpServer): void {
       if (items.length > 0) {
         lines.push("");
         lines.push("**By type:**");
-        for (const [type, count] of Object.entries(typeCounts).sort()) {
-          lines.push(`  ${type}: ${count}`);
+        for (const [tp, count] of Object.entries(typeCounts).sort()) {
+          lines.push(`  ${tp}: ${count}`);
         }
       }
 

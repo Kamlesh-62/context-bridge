@@ -50,6 +50,7 @@ Content.`;
 describe("serializeFrontmatter", () => {
   it("produces valid markdown with frontmatter", () => {
     const meta: MemoryFrontmatter = {
+      id: "a1b2",
       type: "decision",
       title: "Use PostgreSQL",
       tags: ["database", "infrastructure"],
@@ -60,6 +61,7 @@ describe("serializeFrontmatter", () => {
 
     const result = serializeFrontmatter(meta, "We chose PostgreSQL.");
     expect(result).toContain("---");
+    expect(result).toContain("id: a1b2");
     expect(result).toContain("type: decision");
     expect(result).toContain("title: Use PostgreSQL");
     expect(result).toContain("tags: [database, infrastructure]");
@@ -69,6 +71,7 @@ describe("serializeFrontmatter", () => {
 
   it("omits source when not provided", () => {
     const meta: MemoryFrontmatter = {
+      id: "c3d4",
       type: "note",
       title: "Test",
       tags: [],
@@ -82,6 +85,7 @@ describe("serializeFrontmatter", () => {
 
   it("omits tags line when tags array is empty", () => {
     const meta: MemoryFrontmatter = {
+      id: "e5f6",
       type: "note",
       title: "Test",
       tags: [],
@@ -95,6 +99,7 @@ describe("serializeFrontmatter", () => {
 
   it("roundtrips through parse", () => {
     const meta: MemoryFrontmatter = {
+      id: "f7e8",
       type: "fact",
       title: "Node version",
       tags: ["environment"],
@@ -106,6 +111,7 @@ describe("serializeFrontmatter", () => {
     const serialized = serializeFrontmatter(meta, "Node 20.11.0");
     const { meta: parsed, content } = parseFrontmatter(serialized);
 
+    expect(parsed.id).toBe("f7e8");
     expect(parsed.type).toBe("fact");
     expect(parsed.title).toBe("Node version");
     expect(parsed.tags).toEqual(["environment"]);
