@@ -135,6 +135,23 @@ Setup installs these slash commands for Claude Code:
 | `architecture` | System design and patterns |
 | `glossary` | Term definitions |
 
+### How to set the type
+
+Just say it naturally — the AI picks up the type from your phrasing:
+
+```
+"Remember as a decision: we chose PostgreSQL over MongoDB"
+"Remember as architecture: API gateway handles auth and routing"
+"Remember as constraint: all endpoints must respond under 200ms"
+"Remember as a todo: migrate users table to new schema"
+```
+
+If you skip the type, it defaults to `note`. You can change it later:
+
+```
+"Update memory #a1b2 and change type to architecture"
+```
+
 ## How It Works
 
 Memories are stored as **markdown files** in `.ai/memory/` inside your project:
