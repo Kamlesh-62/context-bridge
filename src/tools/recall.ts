@@ -8,7 +8,7 @@ export function registerRecallTool(server: McpServer): void {
     "recall",
     {
       description:
-        "Search and retrieve from project memory. Find relevant decisions, facts, and context by keyword or tags.",
+        "Search shared project memory (.ai/memory/) accessible by all AI CLIs. Find decisions, facts, and context by keyword or tags.",
       inputSchema: {
         query: z.string().optional().describe("Search keywords (case-insensitive)"),
         tags: z.array(z.string()).optional().describe("Filter by tags"),

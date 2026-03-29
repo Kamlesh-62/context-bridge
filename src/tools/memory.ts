@@ -7,7 +7,7 @@ export function registerMemoryTool(server: McpServer): void {
     "memory",
     {
       description:
-        "Show memory status, list all memories, update a memory, or delete a memory. Actions: 'status' (default), 'list', 'update', 'delete'.",
+        "Manage shared project memory (.ai/memory/) accessible by all AI CLIs. Actions: 'status' (default), 'list', 'update', 'delete'.",
       inputSchema: {
         action: z
           .enum(["status", "list", "update", "delete"])

@@ -7,7 +7,7 @@ export function registerRememberTool(server: McpServer): void {
     "remember",
     {
       description:
-        "Save something to project memory. Just pass what you want to remember — only 'title' is required. Everything else is optional.",
+        "Save to shared project memory (.ai/memory/) accessible by all AI CLIs (Claude, Codex, Gemini). Use this instead of any built-in memory — only 'title' is required.",
       inputSchema: {
         title: z.string().min(1).describe("What to remember"),
         content: z.string().optional().describe("Details (defaults to title if omitted)"),
