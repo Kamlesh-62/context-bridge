@@ -1,6 +1,6 @@
 # context-bridge
 
-[![npm version](https://img.shields.io/npm/v/context-bridge)](https://www.npmjs.com/package/context-bridge)
+[![npm version](https://img.shields.io/npm/v/context-bridge-mcp)](https://www.npmjs.com/package/context-bridge-mcp)
 [![CI](https://github.com/Kamlesh-62/context-bridge/actions/workflows/ci.yml/badge.svg)](https://github.com/Kamlesh-62/context-bridge/actions)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Node >= 18](https://img.shields.io/badge/node-%3E%3D18-brightgreen)](https://nodejs.org)
@@ -21,23 +21,23 @@ AI CLI  -->  MCP Server  -->  .ai/memory/
 One command:
 
 ```bash
-npx context-bridge setup
+npx context-bridge-mcp setup
 ```
 
-This auto-configures **Claude Code**, **Gemini CLI**, and **Codex CLI**.
+This auto-configures **Claude Code**, **Gemini CLI**, and **Codex CLI**. The server is registered as `<project-name>-context-bridge` (e.g., `my-app-context-bridge`), making it easy to identify across multiple projects.
 
 Or pick one:
 
 ```bash
-npx context-bridge setup --claude
-npx context-bridge setup --gemini
-npx context-bridge setup --codex
+npx context-bridge-mcp setup --claude
+npx context-bridge-mcp setup --gemini
+npx context-bridge-mcp setup --codex
 ```
 
 Bootstrap your first memory:
 
 ```bash
-npx context-bridge init
+npx context-bridge-mcp init
 ```
 
 Then open your AI CLI and try:

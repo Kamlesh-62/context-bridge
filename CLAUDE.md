@@ -31,7 +31,7 @@ This is an MCP (Model Context Protocol) stdio server called **context-bridge** t
 ### CLI Commands
 
 - `context-bridge` / `context-bridge serve` — start MCP server (default)
-- `context-bridge setup` — auto-configure AI CLIs (`src/setup.ts`)
+- `context-bridge setup` — auto-configure AI CLIs (`src/setup.ts`). Registers as `<project-name>-context-bridge` (derived from directory name).
 - `context-bridge init` — bootstrap `.ai/memory/` with starter memory (`src/init.ts`)
 
 ### 5 MCP Tools

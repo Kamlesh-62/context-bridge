@@ -3,7 +3,7 @@
 ## Quick setup
 
 ```bash
-npx context-bridge setup
+npx context-bridge-mcp setup
 ```
 
 This auto-configures all your AI CLIs in one step:
@@ -12,12 +12,14 @@ This auto-configures all your AI CLIs in one step:
 - **Gemini CLI** — runs `gemini mcp add`
 - **Codex CLI** — runs `codex mcp add`
 
+The server is registered as `<project-name>-context-bridge` (e.g., `my-app-context-bridge`), so you can easily identify it when working with multiple projects.
+
 ### Configure only one CLI
 
 ```bash
-npx context-bridge setup --claude
-npx context-bridge setup --gemini
-npx context-bridge setup --codex
+npx context-bridge-mcp setup --claude
+npx context-bridge-mcp setup --gemini
+npx context-bridge-mcp setup --codex
 ```
 
 ## Verify it works
@@ -32,6 +34,7 @@ You should see:
 
 ```
 Project: /path/to/your/project
+Server:  my-app-context-bridge
 Memory dir: /path/to/your/project/.ai/memory
 Total memories: 0
 ```
@@ -47,6 +50,8 @@ Then try:
 
 If you prefer to configure manually:
 
+Replace `<project>` below with your project name (e.g., `my-app`).
+
 ### Claude Code
 
 Create `.mcp.json` in your project root:
@@ -54,9 +59,9 @@ Create `.mcp.json` in your project root:
 ```json
 {
   "mcpServers": {
-    "context-bridge": {
+    "<project>-context-bridge": {
       "command": "npx",
-      "args": ["-y", "context-bridge"]
+      "args": ["-y", "context-bridge-mcp"]
     }
   }
 }
@@ -65,13 +70,13 @@ Create `.mcp.json` in your project root:
 ### Gemini CLI
 
 ```bash
-gemini mcp add context-bridge -- npx -y context-bridge
+gemini mcp add <project>-context-bridge npx -- -y context-bridge-mcp
 ```
 
 ### Codex CLI
 
 ```bash
-codex mcp add context-bridge -- npx -y context-bridge
+codex mcp add <project>-context-bridge -- npx -y context-bridge-mcp
 ```
 
 ## Git setup
@@ -102,7 +107,7 @@ git commit -m "add project memory"
 
 | Problem | Fix |
 |---------|-----|
-| Server not found | Run `npx context-bridge setup` again |
+| Server not found | Run `npx context-bridge-mcp setup` again |
 | Wrong project | Set `MEMORY_PROJECT_ROOT` env var |
 | No memories found | Run `"Show memory status"` to check the path |
 | npx is slow | Install globally: `npm install -g context-bridge` |

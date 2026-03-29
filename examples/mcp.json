@@ -1,8 +1,8 @@
 {
   "mcpServers": {
-    "context-bridge": {
+    "my-app-context-bridge": {
       "command": "npx",
-      "args": ["-y", "context-bridge"]
+      "args": ["-y", "context-bridge-mcp"]
     }
   }
 }

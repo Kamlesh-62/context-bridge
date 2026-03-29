@@ -3,7 +3,10 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { findProjectRoot } from "./runtime.js";
 
-const SERVER_ID = "context-bridge";
+function buildServerId(projectRoot: string): string {
+  const projectName = path.basename(projectRoot).toLowerCase().replace(/[^a-z0-9-]/g, "-");
+  return `${projectName}-context-bridge`;
+}
 
 type CliName = "claude" | "gemini" | "codex";
 
@@ -40,7 +43,7 @@ function parseSetupArgs(argv: string[]): { clis: CliName[]; help: boolean } {
   return { clis, help };
 }
 
-async function configureClaude(projectRoot: string): Promise<void> {
+async function configureClaude(projectRoot: string, serverId: string): Promise<void> {
   const configPath = path.join(projectRoot, ".mcp.json");
 
   let config: Record<string, unknown> = {};
@@ -58,18 +61,23 @@ async function configureClaude(projectRoot: string): Promise<void> {
     config.mcpServers = {};
   }
 
-  (config.mcpServers as Record<string, unknown>)[SERVER_ID] = {
+  (config.mcpServers as Record<string, unknown>)[serverId] = {
     command: "npx",
-    args: ["-y", "context-bridge"],
+    args: ["-y", "context-bridge-mcp"],
   };
 
   await fs.writeFile(configPath, JSON.stringify(config, null, 2) + "\n", "utf8");
   console.log(`  Claude Code -> ${configPath}`); // eslint-disable-line no-console
 }
 
-function runShellCommand(cmd: string, args: string[], cwd: string): Promise<void> {
+function runShellCommand(
+  cmd: string,
+  args: string[],
+  cwd: string,
+  quiet = false,
+): Promise<void> {
   return new Promise((resolve, reject) => {
-    const child = spawn(cmd, args, { cwd, stdio: "inherit" });
+    const child = spawn(cmd, args, { cwd, stdio: quiet ? "ignore" : "inherit" });
 
     child.on("error", (err) => {
       if ((err as NodeJS.ErrnoException).code === "ENOENT") {
@@ -86,31 +94,31 @@ function runShellCommand(cmd: string, args: string[], cwd: string): Promise<void
   });
 }
 
-async function configureGemini(projectRoot: string): Promise<void> {
+async function configureGemini(projectRoot: string, serverId: string): Promise<void> {
   // Remove first (ignore errors if not exists)
   try {
-    await runShellCommand("gemini", ["mcp", "remove", SERVER_ID], projectRoot);
+    await runShellCommand("gemini", ["mcp", "remove", serverId], projectRoot, true);
   } catch {
     // ignore
   }
   await runShellCommand(
     "gemini",
-    ["mcp", "add", SERVER_ID, "--", "npx", "-y", "context-bridge"],
+    ["mcp", "add", serverId, "npx", "--", "-y", "context-bridge-mcp"],
     projectRoot,
   );
   console.log(`  Gemini CLI -> configured`); // eslint-disable-line no-console
 }
 
-async function configureCodex(projectRoot: string): Promise<void> {
+async function configureCodex(projectRoot: string, serverId: string): Promise<void> {
   // Remove first (ignore errors if not exists)
   try {
-    await runShellCommand("codex", ["mcp", "remove", SERVER_ID], projectRoot);
+    await runShellCommand("codex", ["mcp", "remove", serverId], projectRoot, true);
   } catch {
     // ignore
   }
   await runShellCommand(
     "codex",
-    ["mcp", "add", SERVER_ID, "--", "npx", "-y", "context-bridge"],
+    ["mcp", "add", serverId, "--", "npx", "-y", "context-bridge-mcp"],
     projectRoot,
   );
   console.log(`  Codex CLI -> configured`); // eslint-disable-line no-console
@@ -145,7 +153,9 @@ export async function runSetup(argv: string[]): Promise<number> {
   }
 
   const projectRoot = await findProjectRoot();
-  console.log(`\nProject: ${projectRoot}\n`); // eslint-disable-line no-console
+  const serverId = buildServerId(projectRoot);
+  // eslint-disable-next-line no-console
+  console.log(`\nProject: ${projectRoot}\nServer:  ${serverId}\n`);
 
   let failures = 0;
 
@@ -153,13 +163,13 @@ export async function runSetup(argv: string[]): Promise<number> {
     try {
       switch (cli) {
         case "claude":
-          await configureClaude(projectRoot);
+          await configureClaude(projectRoot, serverId);
           break;
         case "gemini":
-          await configureGemini(projectRoot);
+          await configureGemini(projectRoot, serverId);
           break;
         case "codex":
-          await configureCodex(projectRoot);
+          await configureCodex(projectRoot, serverId);
           break;
       }
     } catch (err) {
