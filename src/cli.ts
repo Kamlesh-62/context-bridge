@@ -1,10 +1,15 @@
 #!/usr/bin/env node
 
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { dirname, join } from "node:path";
 import process from "node:process";
 import { startServer } from "./server/index.js";
 import { log } from "./logger.js";
 
-const VERSION = "1.0.0";
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const pkg = JSON.parse(readFileSync(join(__dirname, "..", "package.json"), "utf8"));
+const VERSION: string = pkg.version;
 
 async function run(): Promise<void> {
   const arg = process.argv[2]?.toLowerCase();

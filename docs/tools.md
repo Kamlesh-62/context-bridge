@@ -2,16 +2,16 @@
 
 ## `remember`
 
-Save something to project memory. Only `title` is required — everything else is optional.
+Save something to shared project memory (.ai/memory/). Only `title` is required — everything else is optional.
 
 ### Parameters
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `title` | string | **Yes** | What to remember |
-| `content` | string | No | Details (defaults to title if omitted) |
+| `title` | string | **Yes** | What to remember (max 200 chars) |
+| `content` | string | No | Details (max 5000 chars, defaults to title if omitted) |
 | `type` | string | No | Memory type (default: `note`) |
-| `tags` | string[] | No | Tags for search |
+| `tags` | string[] | No | Tags for search (max 20) |
 | `source` | string | No | Who saved this (e.g. `claude`, `codex`, `gemini`) |
 | `projectRoot` | string | No | Project root path (auto-detected if omitted) |
 
@@ -30,14 +30,14 @@ Save something to project memory. Only `title` is required — everything else i
 ### Output
 
 ```
-Saved: Use PostgreSQL for database (decision) -> a1b2c3d4-use-postgresql.md
+Saved: Use PostgreSQL for database (decision) -> #a1b2
 ```
 
 ---
 
 ## `recall`
 
-Search and retrieve from project memory.
+Search shared project memory (.ai/memory/) accessible by all AI CLIs.
 
 ### Parameters
 
@@ -67,33 +67,41 @@ Results are ranked by relevance:
 
 ## `memory`
 
-Show status, list all memories, or delete one.
+Manage shared project memory. Actions: status, list, update, delete, compact.
 
 ### Parameters
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `action` | string | No | `status` (default), `list`, or `delete` |
-| `id` | string | No | Memory ID (required for `delete`) |
+| `action` | string | No | `status` (default), `list`, `update`, `delete`, or `compact` |
+| `id` | string | No | Memory ID like `#a1b2` (for `update` and `delete`) |
+| `title` | string | No | Title — for `update` or `delete`-by-title |
+| `content` | string | No | New content (for `update`, max 5000 chars) |
+| `type` | string | No | New type (for `update`) |
+| `tags` | string[] | No | New tags (for `update`) |
 | `projectRoot` | string | No | Project root path (auto-detected if omitted) |
 
 ### Actions
 
 **`status`** (default) — Show project root, memory directory, and count by type.
 
-**`list`** — Show all memories with title, type, tags, and ID.
+**`list`** — Show all memories with short ID, type, title, and tags.
 
 **`update`** — Edit a memory's title, content, type, or tags. Requires `id`.
 
-**`delete`** — Remove a memory by ID. Get the ID from `recall` or `list`.
+**`delete`** — Remove a memory by ID or title. Accepts `id` (e.g. `#a1b2`) or `title`.
+
+**`compact`** — Merge all individual files into a single `.ai/memory.md` file.
 
 ### Examples
 
 ```
 "Show memory status"
 "List all memories"
-"Update memory a1b2c3d4 with new content: now using port 8080"
-"Delete memory a1b2c3d4"
+"Update memory #a1b2 with new content: now using port 8080"
+"Delete memory #a1b2"
+"Delete memory titled Use PostgreSQL"
+"Compact memories"
 ```
 
 ---
@@ -121,7 +129,7 @@ Back up all project memories as JSON.
   "version": 1,
   "exported": "2024-01-15T10:30:00Z",
   "memories": [
-    { "id": "...", "type": "decision", "title": "...", "content": "...", "tags": [...] }
+    { "id": "a1b2", "type": "decision", "title": "...", "content": "...", "tags": [...] }
   ]
 }
 ```
@@ -130,7 +138,7 @@ Back up all project memories as JSON.
 
 ## `import`
 
-Restore memories from a previous export. Duplicates are skipped automatically (matched by title).
+Restore memories from a previous export. Duplicates are skipped automatically (matched by title, including duplicates within the same import payload).
 
 ### Parameters
 

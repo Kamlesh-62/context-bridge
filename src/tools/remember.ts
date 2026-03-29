@@ -21,7 +21,7 @@ export function registerRememberTool(server: McpServer): void {
       },
     },
     async ({ title, content, type, tags, source, projectRoot }) => {
-      const { memoryDir } = await getMemoryDir(projectRoot);
+      const { memoryDir, projectRoot: resolvedRoot } = await getMemoryDir(projectRoot);
 
       const item = await writeMemory(memoryDir, {
         type,
@@ -29,7 +29,7 @@ export function registerRememberTool(server: McpServer): void {
         content: content || title,
         tags,
         source,
-      });
+      }, resolvedRoot);
 
       return {
         content: [

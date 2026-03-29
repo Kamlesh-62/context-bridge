@@ -13,10 +13,10 @@ export function registerImportTool(server: McpServer): void {
       },
     },
     async ({ data, projectRoot }) => {
-      const { memoryDir } = await getMemoryDir(projectRoot);
+      const { memoryDir, projectRoot: resolvedRoot } = await getMemoryDir(projectRoot);
 
       try {
-        const count = await importMemories(memoryDir, data);
+        const count = await importMemories(memoryDir, data, resolvedRoot);
         return {
           content: [
             {

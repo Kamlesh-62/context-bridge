@@ -13,8 +13,8 @@ export function registerExportTool(server: McpServer): void {
       },
     },
     async ({ projectRoot }) => {
-      const { memoryDir } = await getMemoryDir(projectRoot);
-      const json = await exportMemories(memoryDir);
+      const { memoryDir, projectRoot: resolvedRoot } = await getMemoryDir(projectRoot);
+      const json = await exportMemories(memoryDir, resolvedRoot);
       return { content: [{ type: "text", text: json }] };
     },
   );

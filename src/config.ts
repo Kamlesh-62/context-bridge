@@ -1,6 +1,6 @@
 export const CONFIG = {
   serverName: "context-bridge",
-  serverVersion: "1.0.0",
+  serverVersion: "1.0.5",
   /** Directory inside project root where individual memory files are stored */
   memoryDir: ".ai/memory",
   /** Single compacted memory file path */

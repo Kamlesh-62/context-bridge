@@ -32,7 +32,7 @@ export function registerMemoryTool(server: McpServer): void {
       const { memoryDir, projectRoot: resolvedRoot } = await getMemoryDir(projectRoot);
 
       if (action === "compact") {
-        const count = await compactMemories(memoryDir);
+        const count = await compactMemories(memoryDir, resolvedRoot);
         return {
           content: [
             {
@@ -57,9 +57,9 @@ export function registerMemoryTool(server: McpServer): void {
 
         let deleted: boolean;
         if (id) {
-          deleted = await deleteMemory(memoryDir, id);
+          deleted = await deleteMemory(memoryDir, id, resolvedRoot);
         } else {
-          deleted = await deleteMemoryByTitle(memoryDir, title!);
+          deleted = await deleteMemoryByTitle(memoryDir, title!, resolvedRoot);
         }
 
         const ref = id || title;
@@ -79,7 +79,7 @@ export function registerMemoryTool(server: McpServer): void {
             content: [{ type: "text", text: "Error: 'id' is required for update action." }],
           };
         }
-        const updated = await updateMemory(memoryDir, id, { title, content, type, tags });
+        const updated = await updateMemory(memoryDir, id, { title, content, type, tags }, resolvedRoot);
         if (!updated) {
           return {
             content: [{ type: "text", text: `Memory not found: ${id}` }],
@@ -95,7 +95,7 @@ export function registerMemoryTool(server: McpServer): void {
         };
       }
 
-      const items = await readAllMemories(memoryDir);
+      const items = await readAllMemories(memoryDir, resolvedRoot);
 
       if (action === "list") {
         if (items.length === 0) {

@@ -6,12 +6,12 @@ import { findProjectRoot, resolveMemoryDir } from "../runtime.js";
 import { readAllMemories, readMemory } from "../storage.js";
 import { registerTools } from "../tools/index.js";
 
-function registerResources(server: McpServer, memoryDir: string): void {
+function registerResources(server: McpServer, memoryDir: string, projectRoot: string): void {
   server.registerResource(
     "project-memories",
     new ResourceTemplate("memory:///{id}", {
       list: async () => {
-        const items = await readAllMemories(memoryDir);
+        const items = await readAllMemories(memoryDir, projectRoot);
         return {
           resources: items.map((item) => ({
             uri: `memory:///${item.id}`,
@@ -25,7 +25,7 @@ function registerResources(server: McpServer, memoryDir: string): void {
     { description: "Project memory items" },
     async (_uri, variables) => {
       const id = String(variables.id);
-      const item = await readMemory(memoryDir, id);
+      const item = await readMemory(memoryDir, id, projectRoot);
       if (!item) {
         return {
           contents: [{ uri: `memory:///${id}`, text: "Memory not found.", mimeType: "text/plain" }],
@@ -47,7 +47,7 @@ export async function startServer(): Promise<void> {
   const memoryDir = resolveMemoryDir(projectRoot);
 
   registerTools(server);
-  registerResources(server, memoryDir);
+  registerResources(server, memoryDir, projectRoot);
 
   const transport = new StdioServerTransport();
   await server.connect(transport);

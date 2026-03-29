@@ -18,8 +18,8 @@ export function registerRecallTool(server: McpServer): void {
       },
     },
     async ({ query, tags, type, limit, projectRoot }) => {
-      const { memoryDir } = await getMemoryDir(projectRoot);
-      const allItems = await readAllMemories(memoryDir);
+      const { memoryDir, projectRoot: resolvedRoot } = await getMemoryDir(projectRoot);
+      const allItems = await readAllMemories(memoryDir, resolvedRoot);
 
       if (allItems.length === 0) {
         return {

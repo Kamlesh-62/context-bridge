@@ -1,6 +1,6 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import { CONFIG } from "./config.js";
+import { CONFIG, LIMITS } from "./config.js";
 import { findProjectRoot, resolveMemoryDir, nowIso } from "./runtime.js";
 import { newUniqueId, normalizeTags, validateType } from "./domain.js";
 import type { MemoryItem, MemoryFrontmatter } from "./types.js";
@@ -78,6 +78,15 @@ export async function ensureMemoryDir(memoryDir: string): Promise<void> {
 /** Build a filename for a memory item (short ID only). */
 export function buildFilename(id: string): string {
   return `${id}.md`;
+}
+
+/** Enforce title and content length limits. */
+function truncateTitle(title: string): string {
+  return title.slice(0, LIMITS.maxTitleChars);
+}
+
+function truncateContent(content: string): string {
+  return content.slice(0, LIMITS.maxContentChars);
 }
 
 /** Extract the short hex ID from a filename, handling old long format. */
@@ -225,10 +234,13 @@ async function withWriteLock<T>(fn: () => Promise<T>): Promise<T> {
 // --- Public API ---
 
 /** Read all memory items from both individual files and compact file. */
-export async function readAllMemories(memoryDir: string): Promise<MemoryItem[]> {
-  const projectRoot = path.dirname(memoryDir);
+export async function readAllMemories(
+  memoryDir: string,
+  projectRoot?: string,
+): Promise<MemoryItem[]> {
+  const root = projectRoot ?? await resolveProjectRoot(memoryDir);
   const dirItems = await readFromDir(memoryDir);
-  const compactItems = await readFromCompactFile(projectRoot);
+  const compactItems = await readFromCompactFile(root);
 
   // Merge, deduplicating by ID (dir items take precedence)
   const seen = new Set<string>();
@@ -249,9 +261,13 @@ export async function readAllMemories(memoryDir: string): Promise<MemoryItem[]> 
 }
 
 /** Read a single memory item by ID (prefix match). */
-export async function readMemory(memoryDir: string, id: string): Promise<MemoryItem | null> {
+export async function readMemory(
+  memoryDir: string,
+  id: string,
+  projectRoot?: string,
+): Promise<MemoryItem | null> {
   const cleanId = id.replace(/^#/, "");
-  const all = await readAllMemories(memoryDir);
+  const all = await readAllMemories(memoryDir, projectRoot);
   return all.find((item) => item.id.startsWith(cleanId)) ?? null;
 }
 
@@ -259,23 +275,25 @@ export async function readMemory(memoryDir: string, id: string): Promise<MemoryI
 export async function writeMemory(
   memoryDir: string,
   input: { type?: string; title: string; content?: string; tags?: string[]; source?: string },
+  projectRoot?: string,
 ): Promise<MemoryItem> {
-  const projectRoot = path.dirname(memoryDir);
-  const useCompact = await compactFileExists(projectRoot);
+  const root = projectRoot ?? await resolveProjectRoot(memoryDir);
+  const useCompact = await compactFileExists(root);
 
-  const allItems = await readAllMemories(memoryDir);
+  const allItems = await readAllMemories(memoryDir, root);
   const existingIds = new Set(allItems.map((item) => item.id));
 
   const now = nowIso();
   const id = newUniqueId(existingIds);
   const type = validateType(input.type);
   const tags = normalizeTags(input.tags);
-  const content = (input.content || input.title).trim();
+  const title = truncateTitle(input.title.trim());
+  const content = truncateContent((input.content || input.title).trim());
 
   const meta: MemoryFrontmatter = {
     id,
     type,
-    title: input.title.trim(),
+    title,
     tags,
     created: now,
     updated: now,
@@ -285,7 +303,7 @@ export async function writeMemory(
   const item: MemoryItem = {
     id,
     type,
-    title: meta.title,
+    title,
     content,
     tags,
     source: meta.source,
@@ -296,7 +314,7 @@ export async function writeMemory(
   if (useCompact) {
     await withWriteLock(async () => {
       const section = "\n" + serializeFrontmatter(meta, content);
-      await fs.appendFile(resolveCompactFile(projectRoot), section, "utf8");
+      await fs.appendFile(resolveCompactFile(root), section, "utf8");
     });
   } else {
     await ensureMemoryDir(memoryDir);
@@ -309,7 +327,7 @@ export async function writeMemory(
       const files = await fs.readdir(memoryDir);
       const mdFiles = files.filter((f) => f.endsWith(".md"));
       if (mdFiles.length >= CONFIG.compactThreshold) {
-        await compactMemories(memoryDir);
+        await compactMemories(memoryDir, root);
       }
     } catch {
       // ignore auto-compact errors
@@ -324,10 +342,13 @@ export async function updateMemory(
   memoryDir: string,
   id: string,
   updates: { title?: string; content?: string; type?: string; tags?: string[] },
+  projectRoot?: string,
 ): Promise<MemoryItem | null> {
   const cleanId = id.replace(/^#/, "");
-  const projectRoot = path.dirname(memoryDir);
+  const root = projectRoot ?? await resolveProjectRoot(memoryDir);
   const now = nowIso();
+  const safeTitle = updates.title ? truncateTitle(updates.title) : undefined;
+  const safeContent = updates.content ? truncateContent(updates.content) : undefined;
 
   // Try individual files first
   try {
@@ -341,14 +362,14 @@ export async function updateMemory(
       const meta: MemoryFrontmatter = {
         id: item.id,
         type: updates.type ? validateType(updates.type) : item.type,
-        title: updates.title?.trim() || item.title,
+        title: safeTitle?.trim() || item.title,
         tags: updates.tags ? normalizeTags(updates.tags) : item.tags,
         created: item.created,
         updated: now,
         source: item.source,
       };
 
-      const content = updates.content?.trim() || item.content;
+      const content = safeContent?.trim() || item.content;
       const markdown = serializeFrontmatter(meta, content);
       await fs.writeFile(filePath, markdown, "utf8");
 
@@ -369,7 +390,7 @@ export async function updateMemory(
 
   // Try compact file
   return withWriteLock(async () => {
-    const compactPath = resolveCompactFile(projectRoot);
+    const compactPath = resolveCompactFile(root);
     let raw: string;
     try {
       raw = await fs.readFile(compactPath, "utf8");
@@ -385,8 +406,8 @@ export async function updateMemory(
     const updated: MemoryItem = {
       id: item.id,
       type: updates.type ? (validateType(updates.type) as MemoryItem["type"]) : item.type,
-      title: updates.title?.trim() || item.title,
-      content: updates.content?.trim() || item.content,
+      title: safeTitle?.trim() || item.title,
+      content: safeContent?.trim() || item.content,
       tags: updates.tags ? normalizeTags(updates.tags) : item.tags,
       source: item.source,
       created: item.created,
@@ -400,7 +421,11 @@ export async function updateMemory(
 }
 
 /** Delete a memory item by ID. Returns true if deleted. */
-export async function deleteMemory(memoryDir: string, id: string): Promise<boolean> {
+export async function deleteMemory(
+  memoryDir: string,
+  id: string,
+  projectRoot?: string,
+): Promise<boolean> {
   const cleanId = id.replace(/^#/, "");
 
   // Try individual files first
@@ -417,8 +442,8 @@ export async function deleteMemory(memoryDir: string, id: string): Promise<boole
 
   // Try compact file
   return withWriteLock(async () => {
-    const projectRoot = path.dirname(memoryDir);
-    const compactPath = resolveCompactFile(projectRoot);
+    const root = projectRoot ?? await resolveProjectRoot(memoryDir);
+    const compactPath = resolveCompactFile(root);
     let raw: string;
     try {
       raw = await fs.readFile(compactPath, "utf8");
@@ -436,22 +461,29 @@ export async function deleteMemory(memoryDir: string, id: string): Promise<boole
 }
 
 /** Delete a memory item by title (case-insensitive). Returns true if deleted. */
-export async function deleteMemoryByTitle(memoryDir: string, title: string): Promise<boolean> {
+export async function deleteMemoryByTitle(
+  memoryDir: string,
+  title: string,
+  projectRoot?: string,
+): Promise<boolean> {
   const lowerTitle = title.toLowerCase().trim();
-  const all = await readAllMemories(memoryDir);
+  const all = await readAllMemories(memoryDir, projectRoot);
   const match = all.find((item) => item.title.toLowerCase() === lowerTitle);
   if (!match) return false;
-  return deleteMemory(memoryDir, match.id);
+  return deleteMemory(memoryDir, match.id, projectRoot);
 }
 
 /** Compact all individual memory files into a single .ai/memory.md file. Returns count of compacted items. */
-export async function compactMemories(memoryDir: string): Promise<number> {
-  const projectRoot = path.dirname(memoryDir);
-  const compactPath = resolveCompactFile(projectRoot);
+export async function compactMemories(
+  memoryDir: string,
+  projectRoot?: string,
+): Promise<number> {
+  const root = projectRoot ?? await resolveProjectRoot(memoryDir);
+  const compactPath = resolveCompactFile(root);
 
   // Read from both sources
   const dirItems = await readFromDir(memoryDir);
-  const compactItems = await readFromCompactFile(projectRoot);
+  const compactItems = await readFromCompactFile(root);
 
   // Merge (dedup by ID, dir takes precedence)
   const seen = new Set<string>();
@@ -492,19 +524,26 @@ export async function compactMemories(memoryDir: string): Promise<number> {
 }
 
 /** Export all memories as a single JSON string. */
-export async function exportMemories(memoryDir: string): Promise<string> {
-  const items = await readAllMemories(memoryDir);
+export async function exportMemories(
+  memoryDir: string,
+  projectRoot?: string,
+): Promise<string> {
+  const items = await readAllMemories(memoryDir, projectRoot);
   return JSON.stringify({ version: 1, exported: nowIso(), memories: items }, null, 2);
 }
 
 /** Import memories from a JSON string. Returns count of imported items. Skips duplicates by title. */
-export async function importMemories(memoryDir: string, json: string): Promise<number> {
+export async function importMemories(
+  memoryDir: string,
+  json: string,
+  projectRoot?: string,
+): Promise<number> {
   const data = JSON.parse(json);
   if (!data || !Array.isArray(data.memories)) {
     throw new Error("Invalid export format: expected { memories: [...] }");
   }
 
-  const existing = await readAllMemories(memoryDir);
+  const existing = await readAllMemories(memoryDir, projectRoot);
   const existingTitles = new Set(existing.map((item) => item.title.toLowerCase()));
 
   let imported = 0;
@@ -512,13 +551,20 @@ export async function importMemories(memoryDir: string, json: string): Promise<n
     if (!mem.title || typeof mem.title !== "string") continue;
     if (existingTitles.has(mem.title.toLowerCase())) continue;
 
-    await writeMemory(memoryDir, {
-      type: mem.type,
-      title: mem.title,
-      content: mem.content || mem.title,
-      tags: Array.isArray(mem.tags) ? mem.tags : [],
-      source: mem.source,
-    });
+    // Track this title to prevent duplicates within the same import
+    existingTitles.add(mem.title.toLowerCase());
+
+    await writeMemory(
+      memoryDir,
+      {
+        type: mem.type,
+        title: mem.title,
+        content: mem.content || mem.title,
+        tags: Array.isArray(mem.tags) ? mem.tags : [],
+        source: mem.source,
+      },
+      projectRoot,
+    );
     imported++;
   }
 
@@ -534,4 +580,9 @@ export async function getMemoryDir(
     memoryDir: resolveMemoryDir(root),
     projectRoot: root,
   };
+}
+
+/** Resolve project root from memory dir path. */
+async function resolveProjectRoot(_memoryDir: string): Promise<string> {
+  return findProjectRoot();
 }
