@@ -1,0 +1,14 @@
+src/
+tests/
+.github/
+docs/
+coverage/
+*.tsbuildinfo
+.eslintrc.*
+eslint.config.*
+.prettierrc
+vitest.config.*
+tsconfig.json
+tsconfig.build.json
+.DS_Store
+.ai/
