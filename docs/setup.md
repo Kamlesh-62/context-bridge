@@ -8,7 +8,7 @@ npx context-bridge-mcp setup
 
 This auto-configures all your AI CLIs in one step:
 
-- **Claude Code** — creates `.mcp.json` in your project
+- **Claude Code** — creates `.mcp.json` + installs slash commands
 - **Gemini CLI** — runs `gemini mcp add`
 - **Codex CLI** — runs `codex mcp add`
 
@@ -46,6 +46,55 @@ Then try:
 "Recall everything about TypeScript"
 ```
 
+## Using across CLIs
+
+Memories are shared. Save in one CLI, access from any:
+
+| Action | Claude Code | Codex | Gemini |
+|--------|-------------|-------|--------|
+| Save | `/remember use PostgreSQL` | `"Remember we use PostgreSQL"` | `"Remember we use PostgreSQL"` |
+| Search | `/recall database` | `"Recall database"` | `"Recall database"` |
+| List | `/memory-manage list` | `"List all memories"` | `"List all memories"` |
+| Delete | `/memory-manage delete #a1b2` | `"Delete memory #a1b2"` | `"Delete memory #a1b2"` |
+| Compact | `/memory-compact` | `"Compact memories"` | `"Compact memories"` |
+| Status | `/memory-manage status` | `"Show memory status"` | `"Show memory status"` |
+
+### Short IDs
+
+Every memory gets a 4-character ID like `#a1b2`. Use it for update and delete:
+
+```
+"Delete memory #a1b2"
+"Update memory #a1b2 — change title to Use PostgreSQL v16"
+```
+
+You can also delete by title:
+
+```
+"Delete memory titled Use PostgreSQL"
+```
+
+### Compact
+
+Individual memory files auto-compact into `.ai/memory.md` at 20+ files. You can also compact manually:
+
+```
+"Compact memories"
+```
+
+After compacting, new memories append to the single file.
+
+## Slash commands (Claude Code only)
+
+Setup installs these in `.claude/skills/`:
+
+| Command | What it does |
+|---------|-------------|
+| `/remember <text>` | Save a memory |
+| `/recall <query>` | Search memories |
+| `/memory-manage` | List, update, or delete |
+| `/memory-compact` | Merge into single file |
+
 ## Manual setup
 
 If you prefer to configure manually:
@@ -81,12 +130,12 @@ codex mcp add <project>-context-bridge -- npx -y context-bridge-mcp
 
 ## Git setup
 
-Memories live in `.ai/memory/` as markdown files.
+Memories live in `.ai/memory/` as individual files, or `.ai/memory.md` after compacting.
 
 **Commit them (recommended)** — the whole team shares project context:
 
 ```bash
-git add .ai/memory/
+git add .ai/
 git commit -m "add project memory"
 ```
 
@@ -94,6 +143,7 @@ git commit -m "add project memory"
 
 ```
 .ai/memory/
+.ai/memory.md
 ```
 
 ## Environment variables
@@ -110,4 +160,5 @@ git commit -m "add project memory"
 | Server not found | Run `npx context-bridge-mcp setup` again |
 | Wrong project | Set `MEMORY_PROJECT_ROOT` env var |
 | No memories found | Run `"Show memory status"` to check the path |
-| npx is slow | Install globally: `npm install -g context-bridge` |
+| npx is slow | Install globally: `npm install -g context-bridge-mcp` |
+| Claude uses built-in memory | Say `"Use context-bridge to remember..."` explicitly |

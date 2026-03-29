@@ -11,8 +11,8 @@ Save decisions, facts, and context once. Every AI CLI in your project remembers 
 
 ```
 AI CLI  -->  MCP Server  -->  .ai/memory/
-                                  ├── a1b2c3d4-use-postgres.md
-                                  ├── e5f6g7h8-api-port-3000.md
+                                  ├── a1b2.md
+                                  ├── c3d4.md
                                   └── ...
 ```
 
@@ -25,6 +25,8 @@ npx context-bridge-mcp setup
 ```
 
 This auto-configures **Claude Code**, **Gemini CLI**, and **Codex CLI**. The server is registered as `<project-name>-context-bridge` (e.g., `my-app-context-bridge`), making it easy to identify across multiple projects.
+
+For Claude Code, it also installs slash commands: `/remember`, `/recall`, `/memory-manage`, `/memory-compact`.
 
 Or pick one:
 
@@ -57,11 +59,47 @@ That's it.
 |------|-------------|---------|
 | **remember** | Save something | `"Remember that we use PostgreSQL for the database"` |
 | **recall** | Find something | `"Recall everything about the database"` |
-| **memory** | List, update, delete | `"List all memories"` |
+| **memory** | List, update, delete, compact | `"List all memories"` |
 | **export** | Back up | `"Export all memories"` |
 | **import** | Restore | `"Import these memories: <JSON>"` |
 
-More examples in the [examples/](examples/) folder.
+### Short IDs
+
+Every memory gets a short 4-character ID like `#a1b2`. Use it for update and delete:
+
+```
+"Delete memory #a1b2"
+"Update memory #a1b2 — change title to Use PostgreSQL v16"
+```
+
+You can also delete by title:
+
+```
+"Delete memory titled Use PostgreSQL"
+```
+
+### Compact
+
+Memories start as individual files in `.ai/memory/`. When you have many, compact them into a single file:
+
+| CLI | How to compact |
+|-----|---------------|
+| **Claude Code** | `/memory-compact` or `"Compact memories"` |
+| **Codex** | `"Compact memories"` or `"Use memory tool with action compact"` |
+| **Gemini** | `"Compact memories"` or `"Use memory tool with action compact"` |
+
+Auto-compact triggers at 20+ files. After compacting, all memories live in `.ai/memory.md`.
+
+### Slash Commands (Claude Code)
+
+Setup installs these slash commands for Claude Code:
+
+| Command | What it does |
+|---------|-------------|
+| `/remember` | Save a memory |
+| `/recall` | Search memories |
+| `/memory-manage` | List, update, or delete memories |
+| `/memory-compact` | Compact files into `.ai/memory.md` |
 
 ## Why This Over Alternatives?
 
@@ -93,6 +131,7 @@ Memories are stored as **markdown files** in `.ai/memory/` inside your project:
 
 ```markdown
 ---
+id: a1b2
 type: decision
 title: Use PostgreSQL for database
 tags: [database, backend]
@@ -111,12 +150,24 @@ and we need ACID transactions for the payment flow.
 - No lock files — each memory is independent
 - No special tools needed — it's just files
 
-### Should you commit `.ai/memory/`?
+### Compact mode
 
-**Yes.** Commit it to git so the whole team shares the same project memory. Add this to your `.gitignore` if you want to keep it local instead:
+When you run compact (manually or auto at 20+ files), all memories merge into a single `.ai/memory.md` file. New memories are then appended to that file. Both formats are read seamlessly.
+
+### Should you commit memories?
+
+**Yes.** Commit them to git so the whole team shares the same project memory.
+
+```bash
+git add .ai/
+git commit -m "add project memory"
+```
+
+Keep them local instead — add to `.gitignore`:
 
 ```
 .ai/memory/
+.ai/memory.md
 ```
 
 ### MCP Resources

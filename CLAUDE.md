@@ -31,16 +31,16 @@ This is an MCP (Model Context Protocol) stdio server called **context-bridge** t
 ### CLI Commands
 
 - `context-bridge` / `context-bridge serve` — start MCP server (default)
-- `context-bridge setup` — auto-configure AI CLIs (`src/setup.ts`). Registers as `<project-name>-context-bridge` (derived from directory name).
+- `context-bridge setup` — auto-configure AI CLIs (`src/setup.ts`). Registers as `<project-name>-context-bridge` (derived from directory name). Installs Claude Code slash commands.
 - `context-bridge init` — bootstrap `.ai/memory/` with starter memory (`src/init.ts`)
 
 ### 5 MCP Tools
 
 Each tool is a separate file in `src/tools/`, registered via `server.registerTool(name, {description, inputSchema}, handler)` with Zod schemas for input validation.
 
-- **`remember`** — Saves a memory as a `.md` file. Generates an 8-char hex ID + slug filename (e.g. `a1b2c3d4-use-postgres.md`). Only `title` is required.
+- **`remember`** — Saves a memory as a `.md` file. Generates a 4-char hex ID filename (e.g. `a1b2.md`). Only `title` is required.
 - **`recall`** — Searches memories by tokenizing the query, scoring items (+3 per keyword match in title/content, +4 per tag match), and ranking by score.
-- **`memory`** — Four actions: `status` (overview), `list` (all items), `update` (edit in place), `delete` (by ID prefix).
+- **`memory`** — Five actions: `status` (overview), `list` (all items), `update` (edit in place), `delete` (by ID or title), `compact` (merge files into `.ai/memory.md`).
 - **`export`** — Dumps all memories as a single JSON object for backup/sharing.
 - **`import`** — Restores from exported JSON, skipping duplicates by title.
 
@@ -52,9 +52,11 @@ Memories are also exposed as MCP resources via `memory:///{id}` URI template in 
 
 Markdown files with simple YAML frontmatter (type, title, tags, created, updated, source). The frontmatter parser is hand-written — it only handles flat key:value and `[array]` syntax. No external YAML library.
 
-Key functions: `writeMemory()`, `readAllMemories()`, `readMemory()`, `updateMemory()`, `deleteMemory()`, `exportMemories()`, `importMemories()`.
+Key functions: `writeMemory()`, `readAllMemories()`, `readMemory()`, `updateMemory()`, `deleteMemory()`, `deleteMemoryByTitle()`, `compactMemories()`, `exportMemories()`, `importMemories()`.
 
-Files are identified by ID prefix — `readMemory(dir, "a1b2c3d4")` finds any file starting with that prefix.
+Dual-read: reads from both individual files in `.ai/memory/` and compacted `.ai/memory.md`. Smart-write: appends to compact file if it exists, otherwise creates individual files. Auto-compacts at 20+ files (configurable via `CONFIG.compactThreshold`).
+
+Files are identified by 4-char hex ID — `readMemory(dir, "a1b2")` finds by prefix match. Backward compatible with old 8-char+slug filenames.
 
 ### Project Root Detection (`src/runtime.ts`)
 
