@@ -36,7 +36,17 @@ npx context-bridge-mcp setup --gemini
 npx context-bridge-mcp setup --codex
 ```
 
-Bootstrap your first memory:
+### Updating
+
+To get the latest version, re-run setup with `@latest`:
+
+```bash
+npx context-bridge-mcp@latest setup
+```
+
+Running setup again is safe — it overwrites existing config, never duplicates.
+
+### First memory
 
 ```bash
 npx context-bridge-mcp init

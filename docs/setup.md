@@ -22,6 +22,16 @@ npx context-bridge-mcp setup --gemini
 npx context-bridge-mcp setup --codex
 ```
 
+## Updating
+
+To get the latest version, re-run setup with `@latest`:
+
+```bash
+npx context-bridge-mcp@latest setup
+```
+
+Running setup again is safe — it overwrites existing config, never duplicates.
+
 ## Verify it works
 
 Open your AI CLI and say:
@@ -162,3 +172,4 @@ git commit -m "add project memory"
 | No memories found | Run `"Show memory status"` to check the path |
 | npx is slow | Install globally: `npm install -g context-bridge-mcp` |
 | Claude uses built-in memory | Say `"Use context-bridge to remember..."` explicitly |
+| Ran setup twice | No problem — setup overwrites, never duplicates |
